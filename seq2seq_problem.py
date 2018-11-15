@@ -6,7 +6,7 @@
 from random import randint
 from keras.utils import to_categorical
 from numpy import array, argmax, array_equal
-from example.model_pack import SimpleSeq2Seq, AttentionSeq2Seq
+from model_pack import SimpleSeq2Seq, AttentionSeq2Seq
 
 
 def generate_seq(length, n_unique):

@@ -1,6 +1,8 @@
 # coding=utf-8
 """
     各种seq2seq模型的定义，序列的开始符号为"_"
+    attention 模型定义参考
+    https://github.com/uhauha2929/examples/blob/master/Hierarchical%20Attention%20Networks%20.ipynb
 """
 from keras.models import Model
 from keras.layers import Dense, Input, Permute, Lambda, RepeatVector, Multiply
