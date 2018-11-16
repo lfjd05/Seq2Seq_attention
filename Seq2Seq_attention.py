@@ -1,55 +1,120 @@
-# coding=utf-8
 from random import randint
-from keras.utils import to_categorical
-from numpy import array, argmax
+from numpy import array
+from numpy import argmax
+from numpy import array_equal
+from keras.models import Sequential
+from keras.layers import LSTM, TimeDistributed, RepeatVector, Dense
+from model_pack import AttentionDecoder
 
 
-def generate_seq(length, n_unique):
-    """
-    :param length:
-    :param n_unique: 序列值域
-    :return:
-    """
-    # 注意和numpy的不一样是闭区间的
-    return [randint(1, n_unique - 1) for _ in range(length)]
+# generate a sequence of random integers
+def generate_sequence(length, n_unique):
+    return [randint(0, n_unique - 1) for _ in range(length)]
 
 
-def get_dataset(n_in, n_out, cardinality, n_samples):
-    """
-    制作数据集
-    :param n_in:
-    :param n_out:
-    :param cardinality:
-    :param n_samples:
-    :return:
-    """
-    X1, X2, y = list(), list(), list()
-    for _ in range(n_samples):
-        source = generate_seq(n_in, cardinality)
-        target = source[:n_out]
-        target.reverse()
-        target_in = [0] + target[:-1]
-        # 独热编码
-        src_encoded = to_categorical(source, num_classes=cardinality)  # 输入参数为独热编码的维度
-        tar_encoded = to_categorical(target, num_classes=cardinality)
-        tar2_encoded = to_categorical(target_in, num_classes=cardinality)
-        # store
-        X1.append(src_encoded)
-        X2.append(tar2_encoded)  # 解码器的输入，带start
-        y.append(tar_encoded)
-    return array(X1), array(X2), array(y)
+# one hot encode sequence
+def one_hot_encode(sequence, n_unique):
+    encoding = list()
+    for value in sequence:
+        vector = [0 for _ in range(n_unique)]
+        vector[value] = 1
+        encoding.append(vector)
+    return array(encoding)
 
 
-# 解码函数
+# decode a one hot encoded string
 def one_hot_decode(encoded_seq):
     return [argmax(vector) for vector in encoded_seq]
 
 
-# 独热编码的特征数
-n_features = 50 + 1
-n_steps_in = 6  # 输入时间步长度
-n_steps_out = 3  # 输出时间步长度
-# generate a single source and target sequence
-X1, X2, y = get_dataset(n_steps_in, n_steps_out, n_features, 50000)
-print('数据集大小', X1.shape, X2.shape, y.shape)
-print('X1=%s, X2=%s, y=%s' % (one_hot_decode(X1[0]), one_hot_decode(X2[0]), one_hot_decode(y[0])))
+# prepare data for the LSTM
+def get_pair(n_in, n_out, cardinality, n_sample=5000):
+    X, y = list(), list()
+    for _ in range(n_sample):
+        # generate random sequence
+        sequence_in = generate_sequence(n_in, cardinality)
+        sequence_out = sequence_in[:n_out] + [0 for _ in range(n_in - n_out)]
+        # print(sequence_out)
+        # one hot encode
+        src_encoded = one_hot_encode(sequence_in, cardinality)
+        tar2_encoded = one_hot_encode(sequence_out, cardinality)
+        # reshape as 3D
+        src_encoded = src_encoded.reshape((src_encoded.shape[0], src_encoded.shape[1]))
+        tar2_encoded = tar2_encoded.reshape((tar2_encoded.shape[0], tar2_encoded.shape[1]))
+        X.append(src_encoded)
+        y.append(tar2_encoded)
+    return X, y
+
+
+# define the encoder-decoder model
+def baseline_model(n_timesteps_in, n_features):
+    model = Sequential()
+    model.add(LSTM(150, input_shape=(n_timesteps_in, n_features)))
+    model.add(RepeatVector(n_timesteps_in))
+    model.add(LSTM(150, return_sequences=True))
+    model.add(TimeDistributed(Dense(n_features, activation='softmax')))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
+    return model
+
+
+# define model, 这种结构是https://medium.com/datalogue/attention-in-keras-1892773a4f22，中的fig5
+def attention_modle(n_timesteps_in, n_features):
+    model = Sequential()
+    model.add(LSTM(150, input_shape=(n_timesteps_in, n_features), return_sequences=True))
+    model.add(AttentionDecoder(150, n_features))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
+    return model
+
+
+# configure problem
+n_features = 50
+n_timesteps_in = 10
+n_timesteps_out = 4
+epoch = 10
+
+model = attention_modle(n_timesteps_in, n_features)
+X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features)
+X, y = array(X), array(y)
+print('数据维度', X.shape, y.shape)
+# train LSTM
+# generate new random sequence
+# fit model for one epoch on this sequence
+model.fit(X, y, verbose=2, epochs=epoch)
+# evaluate LSTM
+total, correct = 100, 0
+
+for _ in range(total):
+    X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features, n_sample=1)
+    X, y = array(X), array(y)
+    X, y = X.reshape(1, X.shape[1], X.shape[2]), y.reshape(1, X.shape[1], X.shape[2])
+    yhat = model.predict(X, verbose=0)
+    if array_equal(one_hot_decode(y[0]), one_hot_decode(yhat[0])):
+        correct += 1
+print('Accuracy: %.2f%%' % (float(correct) / float(total) * 100.0))
+# spot check some examples
+# for _ in range(10):
+#     X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features, n_sample=1)
+#     X, y = array(X), array(y)
+#     X, y = X.reshape(1, X.shape[1], X.shape[2]), y.reshape(1, X.shape[1], X.shape[2])
+#     yhat = model.predict(X, verbose=0)
+#     print('Expected:', one_hot_decode(y[0]), 'Predicted', one_hot_decode(yhat[0]))
+
+model = baseline_model(n_timesteps_in, n_features)
+X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features)
+X, y = array(X), array(y)
+print('数据维度', X.shape, y.shape)
+# train LSTM
+# generate new random sequence
+# fit model for one epoch on this sequence
+model.fit(X, y, verbose=2, epochs=2*epoch)
+# evaluate LSTM
+total, correct = 100, 0
+
+for _ in range(total):
+    X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features, n_sample=1)
+    X, y = array(X), array(y)
+    X, y = X.reshape(1, X.shape[1], X.shape[2]), y.reshape(1, X.shape[1], X.shape[2])
+    yhat = model.predict(X, verbose=0)
+    if array_equal(one_hot_decode(y[0]), one_hot_decode(yhat[0])):
+        correct += 1
+print('Base model Accuracy: %.2f%%' % (float(correct) / float(total) * 100.0))

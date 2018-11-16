@@ -27,21 +27,21 @@ def get_dataset(n_in, n_out, cardinality, n_samples):
     :param n_samples:
     :return:
     """
-    X1, X2, y = list(), list(), list()
+    x1, x2, y0 = list(), list(), list()
     for _ in range(n_samples):
         source = generate_seq(n_in, cardinality)
-        target = source[:n_out]
-        target.reverse()
-        target_in = [0] + target[:-1]   # 添加起始字符0
+        target_y = source[:n_out]
+        target_y.reverse()
+        target_in = [0] + target_y[:-1]   # 添加起始字符0
         # 独热编码
         src_encoded = to_categorical(source, num_classes=cardinality)  # 输入参数为独热编码的维度
-        tar_encoded = to_categorical(target, num_classes=cardinality)
+        tar_encoded = to_categorical(target_y, num_classes=cardinality)
         tar2_encoded = to_categorical(target_in, num_classes=cardinality)
         # store
-        X1.append(src_encoded)
-        X2.append(tar2_encoded)  # 解码器的输入，带start
-        y.append(tar_encoded)
-    return array(X1), array(X2), array(y)
+        x1.append(src_encoded)
+        x2.append(tar2_encoded)  # 解码器的输入，带start
+        y0.append(tar_encoded)
+    return array(x1), array(x2), array(y0)
 
 
 # 解码函数
@@ -51,19 +51,19 @@ def one_hot_decode(encoded_seq):
 
 # 独热编码的特征数
 n_features = 50 + 1
-n_steps_in = 6  # 输入时间步长度
-n_steps_out = 3  # 输出时间步长度
+n_steps_in = 18  # 输入时间步长度
+n_steps_out = 5  # 输出时间步长度
 # generate a single source and target sequence
-X1, X2, y = get_dataset(n_steps_in, n_steps_out, n_features, 50000)
+X1, X2, y = get_dataset(n_steps_in, n_steps_out, n_features, 10000)
 print(X1.shape, X2.shape, y.shape)
 print('X1=%s, X2=%s, y=%s' % (one_hot_decode(X1[0]), one_hot_decode(X2[0]), one_hot_decode(y[0])))
 
 # Seq2Seq = SimpleSeq2Seq(n_features, n_features, 128)
-Seq2Seq = AttentionSeq2Seq(n_features, n_features, 128)
+Seq2Seq = SimpleSeq2Seq(n_features, n_features, n_features)
 train, infenc, infdec = Seq2Seq.define_models()
 train.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['acc'])
 # train model
-train.fit([X1, X2], y, epochs=20)
+train.fit([X1, X2], y, epochs=20, batch_size=25)
 
 # 评估模型
 total, correct = 100, 0
