@@ -4,7 +4,8 @@ from numpy import argmax
 from numpy import array_equal
 from keras.models import Sequential
 from keras.layers import LSTM, TimeDistributed, RepeatVector, Dense
-from model_pack import AttentionDecoder
+from model_pack import AttentionSeq2Seq
+from layer_component import AttentionDecoder
 
 
 # generate a sequence of random integers
@@ -70,9 +71,11 @@ def attention_modle(n_timesteps_in, n_features):
 n_features = 50
 n_timesteps_in = 10
 n_timesteps_out = 4
-epoch = 10
+epoch = 3
 
-model = attention_modle(n_timesteps_in, n_features)
+Seq2Seq = AttentionSeq2Seq(n_timesteps_in, n_timesteps_out, n_features, n_features, 128)
+model = Seq2Seq.define_full_model()
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
 X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features)
 X, y = array(X), array(y)
 print('数据维度', X.shape, y.shape)
@@ -92,12 +95,12 @@ for _ in range(total):
         correct += 1
 print('Accuracy: %.2f%%' % (float(correct) / float(total) * 100.0))
 # spot check some examples
-# for _ in range(10):
-#     X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features, n_sample=1)
-#     X, y = array(X), array(y)
-#     X, y = X.reshape(1, X.shape[1], X.shape[2]), y.reshape(1, X.shape[1], X.shape[2])
-#     yhat = model.predict(X, verbose=0)
-#     print('Expected:', one_hot_decode(y[0]), 'Predicted', one_hot_decode(yhat[0]))
+for _ in range(10):
+    X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features, n_sample=1)
+    X, y = array(X), array(y)
+    X, y = X.reshape(1, X.shape[1], X.shape[2]), y.reshape(1, X.shape[1], X.shape[2])
+    yhat = model.predict(X, verbose=0)
+    print('Expected:', one_hot_decode(y[0]), 'Predicted', one_hot_decode(yhat[0]))
 
 model = baseline_model(n_timesteps_in, n_features)
 X, y = get_pair(n_timesteps_in, n_timesteps_out, n_features)
