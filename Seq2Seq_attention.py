@@ -30,6 +30,13 @@ def one_hot_decode(encoded_seq):
 
 # prepare data for the LSTM
 def get_pair(n_in, n_out, cardinality, n_sample=5000):
+    """
+    :param n_in: 输入序列长度
+    :param n_out: 输出序列长度
+    :param cardinality:
+    :param n_sample:
+    :return:
+    """
     X, y = list(), list()
     for _ in range(n_sample):
         # generate random sequence
@@ -109,7 +116,7 @@ print('数据维度', X.shape, y.shape)
 # train LSTM
 # generate new random sequence
 # fit model for one epoch on this sequence
-model.fit(X, y, verbose=2, epochs=2*epoch)
+model.fit(X, y, verbose=2, epochs=10*epoch)
 # evaluate LSTM
 total, correct = 100, 0
 
